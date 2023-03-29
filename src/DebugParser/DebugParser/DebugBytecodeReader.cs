@@ -43,7 +43,7 @@ namespace DXDecompiler.DebugParser
 		DebugBytecodeReader Root = null;
 		Stack<DebugIndent> Indents = new Stack<DebugIndent>();
 		public static bool DumpOffsets = true;
-		public string Name;
+		public string Name { get; set; }
 		public bool EndOfBuffer
 		{
 			get { return _reader.BaseStream.Position >= _reader.BaseStream.Length; }
@@ -86,6 +86,15 @@ namespace DXDecompiler.DebugParser
 				LocalMembers.Add(member);
 			}
 			AllMembers.Add(member);
+		}
+		public IDumpable GetNamedMember(string name)
+		{
+			foreach(IDumpable entry in LocalMembers)
+			{
+				if(entry.Name == name)
+					return entry;
+			}
+			return null;
 		}
 		private IEnumerable<IDumpable> GetMembersRecursive()
 		{

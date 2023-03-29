@@ -5,6 +5,8 @@
 		Decompile,
 		Dissassemble,
 		Debug,
-		DebugHtml
+		DebugHtml,
+		DumpAssembly,
+		Reassemble
 	}
 }

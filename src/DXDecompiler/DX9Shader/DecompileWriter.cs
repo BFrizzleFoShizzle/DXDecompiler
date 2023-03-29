@@ -50,5 +50,9 @@ namespace DXDecompiler.DX9Shader
 				}
 			}
 		}
+		public void SetStream(StreamWriter str)
+		{
+			Writer = str;
+		}
 	}
 }

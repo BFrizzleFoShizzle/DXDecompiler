@@ -124,7 +124,7 @@ namespace DXDecompiler.DX9Shader
 			sourceRegisterName += instruction.GetSourceSwizzleName(dataIndex);
 			return sourceRegisterName;
 		}
-		string Version()
+		public string Version()
 		{
 			string minor;
 			switch(shader.MinorVersion)
@@ -341,7 +341,7 @@ namespace DXDecompiler.DX9Shader
 			}
 			return false;
 		}
-		private void WriteInstruction(InstructionToken instruction)
+		public void WriteInstruction(InstructionToken instruction)
 		{
 			if(RemoveIndentInstruction(instruction))
 			{

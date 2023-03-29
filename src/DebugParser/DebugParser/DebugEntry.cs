@@ -5,7 +5,7 @@ namespace DXDecompiler.DebugParser
 {
 	public class DebugEntry : IDumpable
 	{
-		public string Name;
+		public string Name { get; set; }
 		public string DisplayValue;
 		public string Value { get; set; }
 		public int Indent { get; set; }

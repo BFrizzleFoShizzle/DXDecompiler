@@ -6,7 +6,7 @@ namespace DXDecompiler.DebugParser
 {
 	public class DebugIndent : IDumpable
 	{
-		public string Name;
+		public string Name { get; set; }
 		public int Indent { get; set; }
 		public List<IDumpable> Members = new List<IDumpable>();
 		public uint AbsoluteIndex => Members.Count == 0 ? 0 : Members.First().AbsoluteIndex;
@@ -44,6 +44,15 @@ namespace DXDecompiler.DebugParser
 		public void AddNote(string key, object value)
 		{
 			ExtraNotes.Add($"{key}: {value}");
+		}
+		public IDumpable GetNamedMember(string name)
+		{
+			foreach(IDumpable entry in Members)
+			{
+				if(entry.Name == name)
+					return entry;
+			}
+			return null;
 		}
 	}
 }
