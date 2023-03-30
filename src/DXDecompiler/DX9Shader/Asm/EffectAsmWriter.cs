@@ -199,14 +199,20 @@ namespace DXDecompiler.DX9Shader
 					WriteIndent();
 					WriteLine("asm {");
 
-					var variableBlobIndex = variable.DefaultValue[index].UInt;
-					var variableBlob = EffectChunk.VariableBlobs.Find(x => x.Index == variableBlobIndex);
+					if(index >= variable.DefaultValue.Count)
+					{
+						Write($"/* failed to get default value for index: " + index + " */");
+					}
+					else
+					{
+						var variableBlobIndex = variable.DefaultValue[index].UInt;
+						var variableBlob = EffectChunk.VariableBlobs.Find(x => x.Index == variableBlobIndex);
 
-					var disasm = string.Join("\n", AsmWriter.Disassemble(variableBlob.Shader)
-						.Split('\n')
-						.Select(l => $"{new string(' ', Indent * 4)}{l}"));
-					WriteLine(disasm);
-
+						var disasm = string.Join("\n", AsmWriter.Disassemble(variableBlob.Shader)
+							.Split('\n')
+							.Select(l => $"{new string(' ', Indent * 4)}{l}"));
+						WriteLine(disasm);
+					}
 					WriteIndent();
 					WriteLine("};");
 					Indent--;
