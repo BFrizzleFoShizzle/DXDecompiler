@@ -5,5 +5,9 @@
 		public string SourcePath;
 		public string DestPath;
 		public DecompileMode Mode;
+		public bool AddComments;
+		public bool DisableErrorFX;
+		public bool DisableWarningFX;
+		public bool Verbose;
 	}
 }

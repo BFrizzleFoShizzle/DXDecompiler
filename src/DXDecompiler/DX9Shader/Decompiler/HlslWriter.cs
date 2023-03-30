@@ -41,8 +41,9 @@ namespace DXDecompiler.DX9Shader
 		private EffectHLSLWriter _effectWriter;
 		private RegisterState _registers;
 		string _entryPoint;
+		bool _outputDefaultValues;
 
-		public HlslWriter(ShaderModel shader, bool doAstAnalysis = false, string entryPoint = null)
+		public HlslWriter(ShaderModel shader, bool doAstAnalysis = false, string entryPoint = null, bool outputDefaultValues = true)
 		{
 			_shader = shader;
 			_doAstAnalysis = doAstAnalysis;
@@ -50,6 +51,7 @@ namespace DXDecompiler.DX9Shader
 			{
 				_disassember = new(shader);
 			}
+			_outputDefaultValues = outputDefaultValues;
 			if(string.IsNullOrEmpty(entryPoint))
 			{
 				_entryPoint = $"{_shader.Type}Main";
@@ -66,13 +68,13 @@ namespace DXDecompiler.DX9Shader
 			var shaderModel = ShaderReader.ReadShader(bytecode);
 			return Decompile(shaderModel);
 		}
-		public static string Decompile(ShaderModel shaderModel, string entryPoint = null, EffectHLSLWriter effect = null)
+		public static string Decompile(ShaderModel shaderModel, string entryPoint = null, EffectHLSLWriter effect = null, bool outputDefaultValues = true)
 		{
 			if(shaderModel.Type == ShaderType.Effect)
 			{
 				return EffectHLSLWriter.Decompile(shaderModel.EffectChunk);
 			}
-			var hlslWriter = new HlslWriter(shaderModel, false, entryPoint)
+			var hlslWriter = new HlslWriter(shaderModel, false, entryPoint, outputDefaultValues)
 			{
 				_effectWriter = effect
 			};
@@ -607,7 +609,10 @@ namespace DXDecompiler.DX9Shader
 				var assignment = string.IsNullOrEmpty(decompiled.DefaultValue)
 					? string.Empty
 					: $" = {decompiled.DefaultValue}";
-				WriteLine($"{decompiled.Code}{decompiled.RegisterAssignmentString}{assignment};");
+				if(_outputDefaultValues)
+					WriteLine($"{decompiled.Code}{decompiled.RegisterAssignmentString}{assignment};");
+				else
+					WriteLine($"{decompiled.Code}{decompiled.RegisterAssignmentString};");
 			}
 
 
