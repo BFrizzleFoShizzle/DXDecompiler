@@ -291,6 +291,8 @@ namespace DXDecompilerCmd
 						// object cleanup
 						if(!options.DisableCleanup)
 						{
+							if(File.Exists(shaderName + "_temp.fxa"))
+								File.Delete(shaderName + "_temp.fxa");
 							if(File.Exists(shaderName + "_temp_1.fxo"))
 								File.Delete(shaderName + "_temp_1.fxo");
 							if(File.Exists(shaderName + "_temp_2.fxo"))
@@ -320,8 +322,8 @@ namespace DXDecompilerCmd
 			// recompile cleanup
 			if(!options.DisableCleanup)
 			{
-				if(File.Exists(shaderName + "_temp.fxa"))
-					File.Delete(shaderName + "_temp.fxa");
+				if(File.Exists(shaderName + "_temp_1.fxo"))
+					File.Delete(shaderName + "_temp_1.fxo");
 			}
 		}
 
