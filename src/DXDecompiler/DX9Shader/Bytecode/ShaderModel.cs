@@ -161,7 +161,7 @@ namespace DXDecompiler.DX9Shader
 			}
 			else
 			{
-				token = new InstructionToken(opcode, size, this);
+				token = new InstructionToken(opcode, size, this, instructionToken);
 				var inst = token as InstructionToken;
 
 				for(int i = 0; i < size; i++)

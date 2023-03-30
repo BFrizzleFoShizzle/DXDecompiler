@@ -9,5 +9,7 @@
 		public bool DisableErrorFX;
 		public bool DisableWarningFX;
 		public bool Verbose;
+		public bool DisableCleanup;
+		public bool IgnorePreshaders;
 	}
 }

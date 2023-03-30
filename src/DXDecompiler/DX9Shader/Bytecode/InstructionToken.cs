@@ -31,8 +31,10 @@ namespace DXDecompiler.DX9Shader
 	public class InstructionToken : Token
 	{
 		public List<Operand> Operands;
-		public InstructionToken(Opcode opcode, int length, ShaderModel shaderModel) : base(opcode, length, shaderModel)
+		public uint Instruction;
+		public InstructionToken(Opcode opcode, int length, ShaderModel shaderModel, uint instruction) : base(opcode, length, shaderModel)
 		{
+			Instruction = instruction;
 			Operands = new List<Operand>();
 		}
 		public override string ToString()

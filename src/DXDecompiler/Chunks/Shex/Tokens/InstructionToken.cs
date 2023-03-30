@@ -61,6 +61,8 @@ namespace DXDecompiler.Chunks.Shex.Tokens
 
 		public List<Operand> Operands { get; private set; }
 
+		public uint Instruction { get; private set; }
+
 		public InstructionToken()
 		{
 			ExtendedTypes = new List<InstructionTokenExtendedType>();
@@ -76,6 +78,7 @@ namespace DXDecompiler.Chunks.Shex.Tokens
 			// Advance to next token.
 			var instructionEnd = reader.CurrentPosition + (header.Length * sizeof(uint));
 			var token0 = reader.ReadUInt32();
+			instructionToken.Instruction = token0;
 			if(header.OpcodeType == OpcodeType.Sync)
 			{
 				instructionToken.SyncFlags = token0.DecodeValue<SyncFlags>(11, 14);

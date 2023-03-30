@@ -64,9 +64,47 @@ namespace DXDecompilerCmd
 			}
 		}
 
-		public static void SaveShader(string shaderName, DXDecompiler.DX9Shader.ShaderModel shader, bool addComments, bool outputErrorFiles, bool outputWarningFiles, bool verbose, StreamWriter sw)
+		public static byte[] GenerateCompiledFile(string shaderBaseName, string blobShaderType, string majorVersion, string minorVersion, StreamWriter sw)
 		{
-			if(!(shader.Preshader is null))
+			byte[] bytes = null;
+			if(blobShaderType == "Vertex" && File.Exists(shaderBaseName + ".fx"))
+			{
+				CompileShaderToAsm("vs_" + majorVersion + "_" + minorVersion, "VertexMain", shaderBaseName + ".fx", shaderBaseName + "_temp.fxa", sw);
+				AssembleShader("vsa.exe", shaderBaseName + "_temp.fxa", shaderBaseName + ".vo", sw);
+				bytes = LoadCompiledShaderFunction(shaderBaseName + ".vo");
+				File.Delete(shaderBaseName + "_temp.fxa");
+				File.Delete(shaderBaseName + ".vo");
+				sw.WriteLine(shaderBaseName + ".fx");
+			}
+			else if(blobShaderType == "Pixel" && File.Exists(shaderBaseName + ".fx"))
+			{
+				CompileShaderToAsm("ps_" + majorVersion + "_" + minorVersion, "PixelMain", shaderBaseName + ".fx", shaderBaseName + "_temp.fxa", sw);
+				AssembleShader("psa.exe", shaderBaseName + "_temp.fxa", shaderBaseName + ".po", sw);
+				bytes = LoadCompiledShaderFunction(shaderBaseName + ".po");
+				File.Delete(shaderBaseName + "_temp.fxa");
+				File.Delete(shaderBaseName + ".po");
+				sw.WriteLine(shaderBaseName + ".fx");
+			}
+			else if(blobShaderType == "Vertex" && File.Exists(shaderBaseName + ".fxa"))
+			{
+				AssembleShader("vsa.exe", shaderBaseName + ".fxa", shaderBaseName + ".vo", sw);
+				bytes = LoadCompiledShaderFunction(shaderBaseName + ".vo");
+				File.Delete(shaderBaseName + ".vo");
+				sw.WriteLine(shaderBaseName + ".fxa");
+			}
+			else if(blobShaderType == "Pixel" && File.Exists(shaderBaseName + ".fxa"))
+			{
+				AssembleShader("psa.exe", shaderBaseName + ".fxa", shaderBaseName + ".po", sw);
+				bytes = LoadCompiledShaderFunction(shaderBaseName + ".po");
+				File.Delete(shaderBaseName + ".po");
+				sw.WriteLine(shaderBaseName + ".fxa");
+			}
+			return bytes;
+		}
+
+		public static void SaveShader(string shaderName, DXDecompiler.DX9Shader.ShaderModel shader, Options options, StreamWriter sw)
+		{
+			if((!options.IgnorePreshaders) && !(shader.Preshader is null))
 			{
 				string preshaderPath = shaderName + ".preshader.fxa";
 				sw.WriteLine(preshaderPath);
@@ -101,22 +139,38 @@ namespace DXDecompilerCmd
 			shaderDisassembler.SetStream(outFile);
 			shaderDisassembler.WriteConstantTable(shader.ConstantTable);
 			outFile.WriteLine(shaderDisassembler.Version());
+			List<byte> instructionBytes = new List<byte>();
 			foreach(DXDecompiler.DX9Shader.InstructionToken instruction in shader.Instructions)
+			{
+				// used for error-checking later
+				foreach(byte b in BitConverter.GetBytes(instruction.Instruction))
+					instructionBytes.Add(b);
+				for(int i=0;i< instruction.Data.Length;++i)
+					foreach(byte b in BitConverter.GetBytes(instruction.Data[i]))
+						instructionBytes.Add(b);
+
 				shaderDisassembler.WriteInstruction(instruction);
+			}
 
 			outFile.Close();
 
 			// create decompile
 			// disable preshader
 			var preshader = shader.Preshader;
-			shader.Preshader = null;
+			if(options.IgnorePreshaders)
+				shader.Preshader = null;
 			string decompiledHlsl = DXDecompiler.DX9Shader.HlslWriter.Decompile(shader, null, null, true);
 			string finalHlsl = "";
-			if(!addComments)
+			if(!options.AddComments)
 			{
 				foreach(string line in decompiledHlsl.Split('\n'))
-					if(!line.Contains("//"))
-						finalHlsl += line + "\n";
+				{
+					if(line.Contains("//"))
+						continue;
+
+					finalHlsl += line.Replace(" /* not implemented _pp modifier */", "") + "\n";
+				}
+
 			}
 			else
 			{
@@ -125,16 +179,14 @@ namespace DXDecompilerCmd
 			bool tryCompile = true;
 			if(finalHlsl.Contains("Error Const"))
 			{
-				sw.WriteLine(shaderName + ".fxa");
-				if(outputErrorFiles)
+				if(!options.DisableErrorFX)
 				{
 					sw.WriteLine(shaderName + ".fx has bad constants");
 					outFile = File.CreateText(shaderName + ".ERROR" + ".fx");
-
 				}
 				else
 				{
-					return;
+					outFile = null;
 				}
 				finalHlsl = "// File has bad constants\n" + finalHlsl;
 				tryCompile = false;
@@ -143,31 +195,56 @@ namespace DXDecompilerCmd
 			{
 				outFile = File.CreateText(shaderName + ".fx");
 			}
-			shader.Preshader = preshader;
-			outFile.Write(finalHlsl);
-			outFile.Close();
+
+			if(!(outFile is null))
+			{
+				shader.Preshader = preshader;
+				outFile.Write(finalHlsl);
+				outFile.Close();
+			}
+
+			StreamWriter logger = options.Verbose ? sw : null;
+
+			// check assembly
+			string compiler = shader.Type == DXDecompiler.DX9Shader.ShaderType.Pixel ? "psa.exe" : "vsa.exe";
+			AssembleShader(compiler, shaderName + ".fxa", shaderName + "_temp_1.fxo", logger);
+			byte[] assembled = LoadCompiledShaderFunction(shaderName + "_temp_1.fxo");
+			if(assembled.Length == instructionBytes.Count)
+			{
+				// 4 byte header is ignored
+				for(int i = 0; i < assembled.Length; ++i)
+				{
+					if(assembled[i] != instructionBytes[i])
+					{
+						sw.WriteLine(shaderName + ".fxa - error in disassembly (bytes)");
+					}
+				}
+				// success
+				if(!tryCompile)
+					sw.WriteLine(shaderName + ".fxa");
+			}
+			else
+			{
+				sw.WriteLine(shaderName + ".fxa - error in disassembly (length)");
+			}
 
 			if(tryCompile)
 			{
 				try
 				{
 					string mainFunctionName = shader.Type == DXDecompiler.DX9Shader.ShaderType.Pixel ? "PixelMain" : "VertexMain";
-					StreamWriter logger = verbose ? sw : null;
 					CompileShaderToAsm(shaderDisassembler.Version(), mainFunctionName, shaderName + ".fx", shaderName + "_temp.fxa", logger);
 
 					try
 					{
 						// Success! Compare to assembly
-						string compiler = shader.Type == DXDecompiler.DX9Shader.ShaderType.Pixel ? "psa.exe" : "vsa.exe";
-						AssembleShader(compiler, shaderName + ".fxa", shaderName + "_temp_1.fxo", logger);
 						AssembleShader(compiler, shaderName + "_temp.fxa", shaderName + "_temp_2.fxo", logger);
 
-						byte[] assembled = LoadCompiledShaderFunction(shaderName + "_temp_1.fxo");
 						byte[] compiled = LoadCompiledShaderFunction(shaderName + "_temp_2.fxo");
 						if(assembled.Length != compiled.Length)
 						{
 							sw.WriteLine(shaderPath);
-							if(outputWarningFiles)
+							if(!options.DisableWarningFX)
 							{
 								sw.WriteLine(shaderName + ".fx - warning: binary differs after recompilation (length)");
 							}
@@ -185,7 +262,7 @@ namespace DXDecompilerCmd
 							if(assembled[i] != compiled[i])
 							{
 								sw.WriteLine(shaderPath);
-								if(outputWarningFiles)
+								if(!options.DisableWarningFX)
 								{
 									sw.WriteLine(shaderName + ".fx - warning: binary differs after recompilation (bytes)");
 								}
@@ -212,16 +289,19 @@ namespace DXDecompilerCmd
 					finally
 					{
 						// object cleanup
-						if(File.Exists(shaderName + "_temp_1.fxo"))
-							File.Delete(shaderName + "_temp_1.fxo");
-						if(File.Exists(shaderName + "_temp_2.fxo"))
-							File.Delete(shaderName + "_temp_2.fxo");
+						if(!options.DisableCleanup)
+						{
+							if(File.Exists(shaderName + "_temp_1.fxo"))
+								File.Delete(shaderName + "_temp_1.fxo");
+							if(File.Exists(shaderName + "_temp_2.fxo"))
+								File.Delete(shaderName + "_temp_2.fxo");
+						}
 					}
 				}
 				catch(Exception e)
 				{
 					sw.WriteLine(shaderPath);
-					if(outputErrorFiles)
+					if(!options.DisableErrorFX)
 					{
 						sw.WriteLine(shaderName + ".fx - unable to recompile");
 						if(File.Exists(shaderName + ".ERROR" + ".fx"))
@@ -235,12 +315,13 @@ namespace DXDecompilerCmd
 							File.Delete(shaderName + ".fx");
 					}
 				}
-				finally
-				{
-					// recompile cleanup
-					if(File.Exists(shaderName + "_temp.fxa"))
-						File.Delete(shaderName + "_temp.fxa");
-				}
+			}
+
+			// recompile cleanup
+			if(!options.DisableCleanup)
+			{
+				if(File.Exists(shaderName + "_temp.fxa"))
+					File.Delete(shaderName + "_temp.fxa");
 			}
 		}
 
@@ -297,7 +378,9 @@ namespace DXDecompilerCmd
 			options.AddComments = false;
 			options.DisableErrorFX = false;
 			options.DisableWarningFX = false;
+			options.DisableCleanup = false;
 			options.Verbose = false;
+			options.IgnorePreshaders = true;
 			for(int i = 0; i < args.Length; i++)
 			{
 				switch(args[i])
@@ -329,11 +412,17 @@ namespace DXDecompilerCmd
 					case "-E":
 						options.DisableErrorFX = true;
 						break;
+					case "-p":
+						options.IgnorePreshaders = false;
+						break;
 					case "-v":
 						options.Verbose = true;
 						break;
 					case "-c":
 						options.AddComments = true;
+						break;
+					case "-t":
+						options.DisableCleanup = true;
 						break;
 					case "-h":
 						options.Mode = DecompileMode.DebugHtml;
@@ -425,7 +514,7 @@ namespace DXDecompilerCmd
 									var blob = model.EffectChunk.VariableBlobLookup[variable.Parameter][i];
 									if(blob.IsShader)
 									{
-										SaveShader(shaderName, blob.Shader, options.AddComments, !options.DisableErrorFX, !options.DisableWarningFX, options.Verbose, sw);
+										SaveShader(shaderName, blob.Shader, options, sw);
 									}
 								}
 							}
@@ -442,7 +531,7 @@ namespace DXDecompilerCmd
 								DXDecompiler.DX9Shader.FX9.Technique technique = model.EffectChunk.Techniques[(int)blob.TechniqueIndex];
 								DXDecompiler.DX9Shader.FX9.Pass pass = technique.Passes[(int)blob.PassIndex];
 								string shaderName = baseFileName + "." + technique.Name + "." + pass.Name + "." + blob.Shader.Type;
-								SaveShader(shaderName, blob.Shader, options.AddComments, !options.DisableErrorFX, !options.DisableWarningFX, options.Verbose, sw);
+								SaveShader(shaderName, blob.Shader, options, sw);
 							}
 						}
 					}
@@ -488,7 +577,6 @@ namespace DXDecompilerCmd
 										var elementCount = variable.Parameter.ElementCount == 0 ? 1 : variable.Parameter.ElementCount;
 										for(int j = 0; j < elementCount; ++j)
 										{
-
 											string shaderName = baseFileName + "." + techniqueName + "." + j + "." + variable.Parameter.ParameterType;
 											var blob = model.EffectChunk.VariableBlobLookup[variable.Parameter][j];
 											int blobIndex = model.EffectChunk.VariableBlobs.IndexOf(blob);
@@ -518,20 +606,12 @@ namespace DXDecompilerCmd
 										}
 
 										string shaderBaseName = variableBlobFiles[i];
-										sw.WriteLine(variableBlobFiles[i]);
 
-										byte[] replacementBytes = null;
-										if(blobShaderType == "Vertex" && File.Exists(shaderBaseName + ".fxa"))
-										{
-											AssembleShader("vsa.exe", shaderBaseName + ".fxa", shaderBaseName + ".vo", sw);
-											replacementBytes = LoadCompiledShaderFunction(shaderBaseName + ".vo");
-										}
-										else if(blobShaderType == "Pixel" && File.Exists(shaderBaseName + ".fxa"))
-										{
-											AssembleShader("psa.exe", shaderBaseName + ".fxa", shaderBaseName + ".po", sw);
-											replacementBytes = LoadCompiledShaderFunction(shaderBaseName + ".po");
-										}
-										else
+										string majorVersion = shaderReader.GetNamedMember("MajorVersion").Value;
+										string minorVersion = shaderReader.GetNamedMember("MinorVersion").Value;
+										byte[] replacementBytes = GenerateCompiledFile(shaderBaseName, blobShaderType, majorVersion, minorVersion, sw);
+
+										if(replacementBytes == null)
 										{
 											uint variableStart = variableBlob.AbsoluteIndex;
 											byte[] variableBytes = new byte[variableBlob.Size];
@@ -540,8 +620,6 @@ namespace DXDecompilerCmd
 											sw.WriteLine("Bad shader: " + shaderBaseName);
 											continue;
 										}
-
-										sw.WriteLine(shaderBaseName);
 
 										List<DebugIndent> instructions = new List<DebugIndent>();
 										uint instructionsStart = variableBlob.AbsoluteIndex + variableBlob.Size;
@@ -622,18 +700,11 @@ namespace DXDecompilerCmd
 										string passName = ((DebugBytecodeReader)pass.GetNamedMember("NameReader")).GetNamedMember("Name").Value.Split('\"')[1];
 										string shaderBaseName = baseFileName + "." + techniqueName + "." + passName + "." + blobShaderType;
 
-										byte[] replacementBytes = null;
-										if(blobShaderType == "Vertex" && File.Exists(shaderBaseName + ".fxa"))
-										{
-											AssembleShader("vsa.exe", shaderBaseName + ".fxa", shaderBaseName + ".vo", sw);
-											replacementBytes = LoadCompiledShaderFunction(shaderBaseName + ".vo");
-										}
-										else if(blobShaderType == "Pixel" && File.Exists(shaderBaseName + ".fxa"))
-										{
-											AssembleShader("psa.exe", shaderBaseName + ".fxa", shaderBaseName + ".po", sw);
-											replacementBytes = LoadCompiledShaderFunction(shaderBaseName + ".po");
-										}
-										else
+										string majorVersion = shaderReader.GetNamedMember("MajorVersion").Value;
+										string minorVersion = shaderReader.GetNamedMember("MinorVersion").Value;
+										byte[] replacementBytes = GenerateCompiledFile(shaderBaseName, blobShaderType, majorVersion, minorVersion, sw);
+
+										if(replacementBytes == null)
 										{
 											uint stateStart = stateBlob.AbsoluteIndex;
 											byte[] stateBytes = new byte[stateBlob.Size];
@@ -642,9 +713,7 @@ namespace DXDecompilerCmd
 											sw.WriteLine("Bad shader: " + shaderBaseName);
 											continue;
 										}
-
-										sw.WriteLine(shaderBaseName);
-
+										
 										List<DebugIndent> instructions = new List<DebugIndent>();
 										uint instructionsStart = stateBlob.AbsoluteIndex + stateBlob.Size;
 										uint instructionsEnd = stateBlob.AbsoluteIndex;
@@ -692,6 +761,7 @@ namespace DXDecompilerCmd
 										writer.Write(stateBytes);
 									}
 								}
+								writer.Close();
 							}
 							catch(Exception ex)
 							{

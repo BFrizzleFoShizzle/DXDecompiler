@@ -538,16 +538,16 @@ namespace DXDecompiler.DX9Shader
 				case Opcode.Tex:
 					if((shader.MajorVersion == 1 && shader.MinorVersion >= 4) || (shader.MajorVersion > 1))
 					{
-						WriteLine("texld {0}, {1}, {2}", GetDestinationName(instruction),
+						WriteLine("texld{0} {1}, {2}, {3}", GetInstructionModifier(instruction), GetDestinationName(instruction),
 							GetSourceName(instruction, 1), GetSourceName(instruction, 2));
 					}
 					else
 					{
-						WriteLine("tex {0}", GetDestinationName(instruction));
+						WriteLine("tex{0} {1}", GetInstructionModifier(instruction), GetDestinationName(instruction));
 					}
 					break;
 				case Opcode.TexLDL:
-					WriteLine("texldl {0}, {1}, {2}", GetDestinationName(instruction),
+					WriteLine("texldl{0} {1}, {2}, {3}", GetInstructionModifier(instruction), GetDestinationName(instruction),
 						GetSourceName(instruction, 1), GetSourceName(instruction, 2));
 					break;
 				case Opcode.TexKill:
@@ -569,7 +569,7 @@ namespace DXDecompiler.DX9Shader
 						GetInstructionModifier(instruction), GetDestinationName(instruction), GetSourceName(instruction, 1));
 					break;
 				case Opcode.TexLDD:
-					WriteLine("texldd {0}, {1}, {2}, {3}, {4}", GetDestinationName(instruction), GetSourceName(instruction, 1),
+					WriteLine("texldd{0} {1}, {2}, {3}, {4}, {5}", GetInstructionModifier(instruction), GetDestinationName(instruction), GetSourceName(instruction, 1),
 						GetSourceName(instruction, 2), GetSourceName(instruction, 3),
 						GetSourceName(instruction, 4));
 					break;
