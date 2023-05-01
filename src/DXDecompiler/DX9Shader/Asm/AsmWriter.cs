@@ -324,7 +324,7 @@ namespace DXDecompiler.DX9Shader
 			if(rawBytes[0] == 0 && rawBytes[1] == 0 && rawBytes[2] == 0 && rawBytes[3] == 128)
 				return "-0"; // "Negative" zero
 			var floatValue = BitConverter.ToSingle(rawBytes, 0);
-			var result = (floatValue).ToString("G7");
+			var result = (floatValue).ToString("R");
 			return result;
 		}
 		bool AddIndentInstruction(Token instruction)
